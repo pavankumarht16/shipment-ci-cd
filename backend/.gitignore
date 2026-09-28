@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.test
+
+src/generated/prisma/
+
+coverage/
+dist/
+.agents/
+.claude/
+.cursor/
+.devin/
+
+*.log

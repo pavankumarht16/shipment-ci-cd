@@ -7,9 +7,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-     "test": "vitest run",
-    "test:watch": "vitest",
-    "postinstall": "prisma skills sync || exit 0"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",

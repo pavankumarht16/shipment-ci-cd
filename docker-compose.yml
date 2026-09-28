@@ -1,0 +1,42 @@
+services:
+
+  postgres:
+    image: postgres:17
+    container_name: shipment-postgres
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shipment_db
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - shipment-postgres-data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d shipment_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+
+    container_name: shipment-backend
+
+    ports:
+      - "5000:5000"
+
+    environment:
+      PORT: 5000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/shipment_db
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  shipment-postgres-data:

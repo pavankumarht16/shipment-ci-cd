@@ -58,6 +58,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shipment_ci_test
 
+      - name: Run ESLint
+        run: npm run lint
+
       - name: Run tests
         run: npm test
         env:

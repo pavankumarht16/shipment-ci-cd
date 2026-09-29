@@ -1,4 +1,4 @@
-name: Shipment Backend CI
+name: Shipment CI/CD
 
 on:
   push:
@@ -10,11 +10,16 @@ on:
       - main
 
 jobs:
+
+  # =========================
+  # CI
+  # =========================
   test:
+
+    name: CI - Test and Validate
 
     permissions:
       contents: read
-      packages: write
 
     runs-on: ubuntu-latest
 
@@ -73,6 +78,29 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shipment_ci_test
 
+
+  # =========================
+  # CD - Continuous Delivery
+  # =========================
+  delivery:
+
+    name: CD - Build and Publish Docker Image
+
+    needs: test
+
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      packages: write
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -85,4 +113,6 @@ jobs:
         with:
           context: ./backend
           push: true
-          tags: ghcr.io/${{ github.repository }}:latest
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.sha }}

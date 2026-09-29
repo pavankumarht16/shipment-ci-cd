@@ -1,15 +1,10 @@
-import "dotenv/config";
-import { defineConfig } from "prisma/config";
-
 const getDatabaseUrl = () => {
     if (process.env.DATABASE_URL) {
         return process.env.DATABASE_URL;
     }
 
     if (process.env.VCAP_SERVICES) {
-        const vcapServices = JSON.parse(
-            process.env.VCAP_SERVICES
-        );
+        const vcapServices = JSON.parse(process.env.VCAP_SERVICES);
 
         const postgresService =
             vcapServices["postgresql-db"]?.[0];
@@ -26,14 +21,4 @@ const getDatabaseUrl = () => {
     );
 };
 
-export default defineConfig({
-    schema: "prisma/schema.prisma",
-
-    migrations: {
-        path: "prisma/migrations"
-    },
-
-    datasource: {
-        url: getDatabaseUrl()
-    }
-});
+export default getDatabaseUrl();

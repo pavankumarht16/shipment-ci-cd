@@ -14,7 +14,7 @@ COPY prisma.config.ts ./
 
 COPY prisma ./prisma
 
-RUN DATABASE_URL="postgresql://postgres:postgres@postgres:5432/shipment_db" npx prisma generate
+RUN DATABASE_URL="postgresql://postgres:postgres@postgres:5432/shipment_db" ./node_modules/.bin/prisma generate
 
 COPY src ./src
 

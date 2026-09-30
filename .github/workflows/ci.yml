@@ -12,11 +12,11 @@ on:
 jobs:
 
   # =========================
-  # CI
+  # BACKEND CI
   # =========================
-  test:
+  backend-test:
 
-    name: CI - Test and Validate
+    name: Backend - Test and Validate
 
     permissions:
       contents: read
@@ -80,13 +80,56 @@ jobs:
 
 
   # =========================
-  # CD - Continuous Delivery
+  # FRONTEND CI
+  # =========================
+  frontend-test:
+
+    name: Frontend - Test and Validate
+
+    permissions:
+      contents: read
+
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+
+  # =========================
+  # DOCKER DELIVERY
   # =========================
   delivery:
 
-    name: CD - Build and Publish Docker Image
+    name: CD - Build and Publish Docker Images
 
-    needs: test
+    needs:
+      - backend-test
+      - frontend-test
 
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
@@ -101,6 +144,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+
+      # =========================
+      # GHCR LOGIN
+      # =========================
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -108,7 +155,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
+
+      # =========================
+      # BACKEND IMAGE
+      # =========================
+      - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -116,3 +167,16 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+
+      # =========================
+      # FRONTEND IMAGE
+      # =========================
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}-frontend:latest
+            ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}

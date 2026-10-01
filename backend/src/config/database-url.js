@@ -12,7 +12,9 @@ const getDatabaseUrl = () => {
         const uri = postgresService?.credentials?.uri;
 
         if (uri) {
-            return `${uri}?sslmode=require`;
+            return uri.includes("?")
+                ? `${uri}&sslmode=require`
+                : `${uri}?sslmode=require`;
         }
     }
 

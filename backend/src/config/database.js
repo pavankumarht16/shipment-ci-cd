@@ -6,7 +6,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import databaseUrl from "./database-url.js";
 
 const adapter = new PrismaPg({
-    connectionString: databaseUrl
+    connectionString: databaseUrl,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 
 const prisma = new PrismaClient({

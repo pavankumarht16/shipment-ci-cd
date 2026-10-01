@@ -14,8 +14,8 @@ jobs:
   # =========================
   # BACKEND CI
   # =========================
-  backend-test:
 
+  backend-test:
     name: Backend - Test and Validate
 
     permissions:
@@ -82,8 +82,8 @@ jobs:
   # =========================
   # FRONTEND CI
   # =========================
-  frontend-test:
 
+  frontend-test:
     name: Frontend - Test and Validate
 
     permissions:
@@ -123,8 +123,8 @@ jobs:
   # =========================
   # DOCKER + BTP DELIVERY
   # =========================
-  delivery:
 
+  delivery:
     name: CD - Build, Publish and Deploy to BTP
 
     needs:
@@ -144,6 +144,7 @@ jobs:
       # =========================
       # CHECKOUT
       # =========================
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -151,6 +152,7 @@ jobs:
       # =========================
       # GHCR LOGIN
       # =========================
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -162,6 +164,7 @@ jobs:
       # =========================
       # BACKEND IMAGE
       # =========================
+
       - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
@@ -175,13 +178,16 @@ jobs:
       # =========================
       # FRONTEND IMAGE
       # =========================
+
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
           push: true
+
           build-args: |
             VITE_API_URL=https://shipment-backend.cfapps.us10-001.hana.ondemand.com/api
+
           tags: |
             ghcr.io/${{ github.repository }}-frontend:latest
             ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
@@ -190,22 +196,31 @@ jobs:
       # =========================
       # INSTALL CF CLI
       # =========================
+
       - name: Install Cloud Foundry CLI
         run: |
           curl -L "https://packages.cloudfoundry.org/stable?release=linux64-binary&version=v8" \
             -o cf-cli.tgz
+
           tar -xzf cf-cli.tgz
+
           sudo mv cf8 /usr/local/bin/cf
+
           cf --version
 
 
       # =========================
       # LOGIN TO SAP BTP
       # =========================
+
       - name: Login to SAP BTP
         run: |
           cf api "${{ secrets.CF_API }}"
-          cf auth "${{ secrets.CF_USERNAME }}" "${{ secrets.CF_PASSWORD }}"
+
+          cf auth \
+            "${{ secrets.CF_USERNAME }}" \
+            "${{ secrets.CF_PASSWORD }}"
+
           cf target \
             -o "${{ secrets.CF_ORG }}" \
             -s "${{ secrets.CF_SPACE }}"
@@ -214,6 +229,7 @@ jobs:
       # =========================
       # DEPLOY BACKEND
       # =========================
+
       - name: Deploy backend to SAP BTP
         run: |
           cf push shipment-backend \
@@ -223,8 +239,11 @@ jobs:
       # =========================
       # RUN PRISMA MIGRATIONS
       # =========================
+
       - name: Run Prisma migrations
-        shell: bash
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+
         run: |
           TASK_NAME="prisma-migrate-${GITHUB_SHA}"
 
@@ -234,16 +253,21 @@ jobs:
 
           echo "Waiting for Prisma migration task..."
 
+          TASK_ID=""
+
           for i in {1..30}; do
 
-            TASK_ID=$(cf tasks shipment-backend | \
-              awk -v name="$TASK_NAME" '$2 == name {print $1; exit}')
+            TASK_LIST="$(cf tasks shipment-backend)"
+
+            TASK_ID="$(printf '%s\n' "$TASK_LIST" | \
+              awk -v name="$TASK_NAME" '$2 == name {print $1; exit}')"
 
             if [ -n "$TASK_ID" ]; then
               break
             fi
 
             sleep 2
+
           done
 
           if [ -z "$TASK_ID" ]; then
@@ -255,8 +279,10 @@ jobs:
 
           for i in {1..60}; do
 
-            STATE=$(cf task shipment-backend "$TASK_ID" | \
-              awk -F': +' '/state:/ {print $2; exit}')
+            TASK_INFO="$(cf task shipment-backend "$TASK_ID")"
+
+            STATE="$(printf '%s\n' "$TASK_INFO" | \
+              awk -F': +' '/state:/ {print $2; exit}')"
 
             echo "Migration state: $STATE"
 
@@ -267,7 +293,9 @@ jobs:
 
             if [ "$STATE" = "FAILED" ]; then
               echo "Prisma migrations failed."
-              cf logs shipment-backend --recent
+
+              cf task shipment-backend "$TASK_ID"
+
               exit 1
             fi
 
@@ -276,12 +304,16 @@ jobs:
           done
 
           echo "Migration task timed out."
+
+          cf task shipment-backend "$TASK_ID"
+
           exit 1
 
 
       # =========================
       # DEPLOY FRONTEND
       # =========================
+
       - name: Deploy frontend to SAP BTP
         run: |
           cf push shipment-frontend \
@@ -291,6 +323,7 @@ jobs:
       # =========================
       # VERIFY DEPLOYMENTS
       # =========================
+
       - name: Verify BTP applications
         run: |
           cf apps

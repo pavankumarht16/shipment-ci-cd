@@ -5,11 +5,19 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 import databaseUrl from "./database-url.js";
 
+const useSsl =
+    Boolean(process.env.VCAP_SERVICES) ||
+    databaseUrl.includes("sslmode=require");
+
 const adapter = new PrismaPg({
     connectionString: databaseUrl,
-    ssl: {
-        rejectUnauthorized: false
-    }
+    ...(useSsl
+        ? {
+              ssl: {
+                  rejectUnauthorized: false
+              }
+          }
+        : {})
 });
 
 const prisma = new PrismaClient({

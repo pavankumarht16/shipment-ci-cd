@@ -121,11 +121,11 @@ jobs:
 
 
   # =========================
-  # DOCKER DELIVERY
+  # DOCKER + BTP DELIVERY
   # =========================
   delivery:
 
-    name: CD - Build and Publish Docker Images
+    name: CD - Build, Publish and Deploy to BTP
 
     needs:
       - backend-test
@@ -141,6 +141,9 @@ jobs:
 
     steps:
 
+      # =========================
+      # CHECKOUT
+      # =========================
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -182,3 +185,112 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}-frontend:latest
             ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
+
+
+      # =========================
+      # INSTALL CF CLI
+      # =========================
+      - name: Install Cloud Foundry CLI
+        run: |
+          curl -L "https://packages.cloudfoundry.org/stable?release=linux64-binary&version=v8" \
+            -o cf-cli.tgz
+          tar -xzf cf-cli.tgz
+          sudo mv cf8 /usr/local/bin/cf
+          cf --version
+
+
+      # =========================
+      # LOGIN TO SAP BTP
+      # =========================
+      - name: Login to SAP BTP
+        run: |
+          cf api "${{ secrets.CF_API }}"
+          cf auth "${{ secrets.CF_USERNAME }}" "${{ secrets.CF_PASSWORD }}"
+          cf target \
+            -o "${{ secrets.CF_ORG }}" \
+            -s "${{ secrets.CF_SPACE }}"
+
+
+      # =========================
+      # DEPLOY BACKEND
+      # =========================
+      - name: Deploy backend to SAP BTP
+        run: |
+          cf push shipment-backend \
+            --docker-image ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+
+      # =========================
+      # RUN PRISMA MIGRATIONS
+      # =========================
+      - name: Run Prisma migrations
+        shell: bash
+        run: |
+          TASK_NAME="prisma-migrate-${GITHUB_SHA}"
+
+          cf run-task shipment-backend \
+            --name "$TASK_NAME" \
+            --command "cd /app && /app/node_modules/.bin/prisma migrate deploy"
+
+          echo "Waiting for Prisma migration task..."
+
+          for i in {1..30}; do
+
+            TASK_ID=$(cf tasks shipment-backend | \
+              awk -v name="$TASK_NAME" '$2 == name {print $1; exit}')
+
+            if [ -n "$TASK_ID" ]; then
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ -z "$TASK_ID" ]; then
+            echo "Could not find migration task."
+            exit 1
+          fi
+
+          echo "Migration task ID: $TASK_ID"
+
+          for i in {1..60}; do
+
+            STATE=$(cf task shipment-backend "$TASK_ID" | \
+              awk -F': +' '/state:/ {print $2; exit}')
+
+            echo "Migration state: $STATE"
+
+            if [ "$STATE" = "SUCCEEDED" ]; then
+              echo "Prisma migrations completed successfully."
+              exit 0
+            fi
+
+            if [ "$STATE" = "FAILED" ]; then
+              echo "Prisma migrations failed."
+              cf logs shipment-backend --recent
+              exit 1
+            fi
+
+            sleep 5
+
+          done
+
+          echo "Migration task timed out."
+          exit 1
+
+
+      # =========================
+      # DEPLOY FRONTEND
+      # =========================
+      - name: Deploy frontend to SAP BTP
+        run: |
+          cf push shipment-frontend \
+            --docker-image ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
+
+
+      # =========================
+      # VERIFY DEPLOYMENTS
+      # =========================
+      - name: Verify BTP applications
+        run: |
+          cf apps
